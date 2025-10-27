@@ -58,15 +58,16 @@ module XeroRuby
 
     def authorization_url
       url = URI.parse(@config.login_url)
-      url.query = URI.encode_www_form(
-        {
-          response_type: 'code',
-          client_id: @client_id,
-          redirect_uri: @redirect_uri,
-          scope: @scopes,
-          state: @state
-        }.compact
-      )
+      params = {
+        response_type: 'code',
+        client_id: @client_id,
+        redirect_uri: @redirect_uri,
+        scope: @scopes,
+        state: @state
+      }
+      # Remove nil values for Ruby 2.3 compatibility (Hash#compact was introduced in Ruby 2.4)
+      params = params.reject { |k, v| v.nil? }
+      url.query = URI.encode_www_form(params)
       url.to_s
     end
 
