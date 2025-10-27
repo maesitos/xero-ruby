@@ -305,8 +305,16 @@ module XeroRuby
       end
 
       connection = Faraday.new(:url => method_base_url, :ssl => ssl_options) do |conn|
-        conn.request(:authorization, :basic, config.username, config.password)
-        if opts[:header_params]["Content-Type"] == "multipart/form-data"
+        # Use basic_auth when available (works with Faraday 1.x). Avoid calling
+        # `conn.request(:authorization, :basic, ...)` directly because some
+        # Faraday versions raise an arity error. Fall back to setting the
+        # Authorization header per-request if basic_auth is missing.
+        begin
+          conn.basic_auth(@config.username, @config.password) if @config.username || @config.password
+        rescue NoMethodError
+          # basic_auth not available; build_request will set Authorization header.
+        end
+        if opts[:header_params] && opts[:header_params]["Content-Type"] == "multipart/form-data"
           conn.request :multipart
           conn.request :url_encoded
         end
@@ -369,6 +377,14 @@ module XeroRuby
       form_params = opts[:form_params] || {}
 
       update_params_for_auth! header_params, query_params, opts[:auth_names]
+
+      # Fallback: If we have username and password but no Authorization header set,
+      # set basic auth header manually (for when Faraday.basic_auth failed above)
+      if (@config.username || @config.password) && !header_params['Authorization']
+        require 'base64'
+        credentials = Base64.strict_encode64("#{@config.username}:#{@config.password}")
+        header_params['Authorization'] = "Basic #{credentials}"
+      end
 
       req_opts = {
         :method => http_method,
